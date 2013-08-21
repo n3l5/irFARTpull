@@ -40,7 +40,7 @@ LINKs:
 irFARTpull main - https://github.com/n3l5/irFARTpull
 	
 Links to required tools:
-- mft2csv - Part of the mft2csv suite, RawCopy can be downloaded here: https://code.google.com/p/mft2csv/
+- RawCopy64.exe - Part of the mft2csv suite, RawCopy can be downloaded here: https://code.google.com/p/mft2csv/
 - 7-Zip - Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
 	
 Various tools for analysis of the artifacts:
