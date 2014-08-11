@@ -25,14 +25,12 @@ Artifacts it grabs:
 When done collecting the artifacts, it will 7zip the data and yank the info off the box for off-line analysis. 
 		
 NOTEs: 
-- All testing done on PowerShell v3
-- Tested only on Windows 7 x64. (future versions will feature x86 and XP detections
+- All testing done on PowerShell v3 oe v4
 - Requires RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
 - Requires 7za.exe (7zip cmd line) for compression w/ password protection
 	
 Assumed Directories:
-- c:\tools\resp\ - where the RawCopy64.exe and 7za.exe exist
-- c:\windows\temp\IR - Where the work will be done
+- c:\windows\temp\IR - Where the work will be done (no need to create)
 		
 ***As expected: Must be ran a user that will have Admin creds on the remote system. The assumption is that the target system is part of a domain.
 	
