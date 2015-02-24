@@ -3,7 +3,7 @@
     IR Forensic ARTifact pull (irFArtpull)
 
 .DESCRIPTION
-irFARTpull is a PowerShell script utilized to pull several forensic artifacts from a live WinXP-Win7 system on your network. It DOES NOT utilize WinRM capabilities.
+irFARTpull is a PowerShell script utilized to pull several forensic artifacts from a live Win7+ system on your network. It DOES NOT utilize WinRM remote capabilities.
 
 Artifacts it grabs:
 	- Disk Information
@@ -41,7 +41,7 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 
 .NOTEs:  
     
-	All testing done on PowerShell v3
+	All testing done on PowerShell v4
 	Requires Remote Registry PowerShell Module for collecting XP remote registy entries
 	Requires RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
 	Requires 7za.exe (7zip cmd line) for compression w/ password protection
@@ -102,7 +102,6 @@ Write-Host -Fore Yellow "Run as administrator/elevated privileges!!!"
 echo "=============================================="
 echo ""
 
-
 Write-Host -Fore Cyan ">>>>> Press a key to begin...."
 [void][System.Console]::ReadKey($TRUE)
 echo ""
@@ -111,44 +110,52 @@ $userDom = Read-Host "Enter your target DOMAIN (if any)..."
 $username = Read-Host "Enter you UserID..."
 $domCred = "$userDom" + "\$username"
 $compCred = "$target" + "\$username"
-#Fill credentials based on whether domain or remote system credentials used 
-if (!($userDom)){
-	$cred = Get-Credential $compCred
-	}
-else {
-	$cred = Get-Credential $domCred
-	}
-echo ""
+
+##Fill credentials based on whether domain or remote system credentials used 
+
+	if (!($userDom)){
+		$cred = Get-Credential $compCred
+		}
+	else {
+		$cred = Get-Credential $domCred
+		}
+	echo ""
 
 #Test if the box is up and running
 
-Write-Host -Fore Yellow ">>>>> Testing connection to $target...."
-echo ""
-if ((!(Test-Connection -Cn $target -BufferSize 16 -Count 1 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
-	Write-Host -Foreground Magenta "$target appears to be down"
-	}
+	Write-Host -Fore Yellow ">>>>> Testing connection to $target...."
+	echo ""
+	if ((!(Test-Connection -Cn $target -Count 2 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
+		Write-Host -Foreground Magenta "$target appears to be down"
+		}
 
 ################
-#Target is up start the collection
+##Target is up, start the collection
 ################
 
 else {
+Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 
 #Determine if Mail Alert is wanted ask for particulars
-if ($mail -like "Y*") {
-	$mailTo = Read-Host "Enter alert TO: email address...multiples should separated like such - "user1@abc.com", "user2@abc.com""
-	$mailFrom = Read-Host "Enter alert FROM: email address..."
-	$smtpServer = Read-Host "Enter SMTP relay server..."
-	}
+	if ($mail -like "Y*") {
+		$mailTo = Read-Host "Enter alert TO: email address...multiples should separated like such - "user1@abc.com", "user2@abc.com""
+		$mailFrom = Read-Host "Enter alert FROM: email address..."
+		$smtpServer = Read-Host "Enter SMTP relay server..."
+		}
 elseif ((!($mail)) -OR ($mail -like "N*")) {
 	Write-Host -Foregroundcolor Cyan "  -Mail notification off-"
-	}
+		}
 
 #Get system info
-	$targetName = Get-WMIObject Win32_ComputerSystem -ComputerName $target -Credential $cred | ForEach-Object Name
-	$targetIP = Get-WMIObject -Class Win32_NetworkAdapterConfiguration -ComputerName $target -Credential $cred -Filter "IPEnabled='TRUE'" | Where {$_.IPAddress} | Select -ExpandProperty IPAddress | Where{$_ -notlike "*:*"}
+	$targetName = Get-WMIObject -class Win32_ComputerSystem -ComputerName $target -Credential $cred | ForEach-Object Name
+	$targetIP = Get-WMIObject -class Win32_NetworkAdapterConfiguration -ComputerName $target -Credential $cred -Filter "IPEnabled='TRUE'" | Where {$_.IPAddress} | Select -ExpandProperty IPAddress | Where{$_ -notlike "*:*"}
+	$OSname = (Get-WmiObject Win32_OperatingSystem -Computer $target -Credential $cred).caption
 	$mem = Get-WMIObject -class Win32_PhysicalMemory -ComputerName $target -Credential $cred | Measure-Object -Property capacity -Sum | % {[Math]::Round(($_.sum / 1GB),2)} 
-
+	$mfg = Get-WmiObject -class Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty manufacturer
+	$model = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty model
+	$pctype = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty PCSystemType
+	$sernum = Get-wmiobject Win32_Bios -ComputerName $target -Credential $cred | select -ExpandProperty SerialNumber
+	$tmzn = Get-WmiObject -class Win32_TimeZone -Computer $target -Credential $cred | select -ExpandProperty caption
 #Display logged in user info (if any)	
 	if ($expproc = gwmi win32_process -computer $target -Credential $cred -Filter "Name = 'explorer.exe'") {
 		$exuser = ($expproc.GetOwner()).user
@@ -156,11 +163,33 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 		$currUser = "$exdom" + "\$exuser" }
 	else { 
 		$currUser = "NONE" 
-	}
+		}
+	echo ""
+	echo "=============================================="
+	
+	Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
 
-echo ""
-echo "=============================================="
-Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP ]=="
+##Determine x32 or x64
+
+	$arch = Get-WmiObject -Class Win32_Processor -ComputerName $target -Credential $cred | foreach {$_.AddressWidth}
+
+#Determine XP or Win7
+	
+	$OSvers = Get-WMIObject -Class Win32_OperatingSystem -ComputerName $target -Credential $cred | foreach {$_.Version}
+	
+	if ($OSvers -like "6*"){
+		Write-Host -ForegroundColor Magenta "==[ Host OS: $OSname $arch"
+		}
+		Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
+		Write-Host -ForegroundColor Magenta "==[ Total memory size: $mem GB"
+		Write-Host -ForegroundColor Magenta "==[ Manufacturer: $mfg"
+		Write-Host -ForegroundColor Magenta "==[ Model: $model"
+		Write-Host -ForegroundColor Magenta "==[ System Type: $pctype"
+		Write-Host -ForegroundColor Magenta "==[ Serial Number: $sernum"
+		Write-Host -ForegroundColor Magenta "==[ Timezone: $tmzn"
+		Write-Host -ForegroundColor Magenta "==[ Current logged on user: $currUser"
+		echo "=============================================="
+		echo ""
 
 ################
 ##Set up environment on remote system. IR folder for tools and art folder for artifacts.##
@@ -168,25 +197,6 @@ Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP ]=="
 ##For consistency, the working directory will be located in the "c:\windows\temp\IR" folder on both the target and initiator system.
 ##Tools will stored directly in the "IR" folder for use. Artifacts collected on the local environment of the remote system will be dropped in the workingdir.
 
-##Set up hashing to MD5
-$hashalgorithm = 'md5'
-
-##Determine x32 or x64
-$arch = Get-WmiObject -Class Win32_Processor -ComputerName $target -Credential $cred | foreach {$_.AddressWidth}
-
-#Determine XP or Win7
-$OSvers = Get-WMIObject -Class Win32_OperatingSystem -ComputerName $target -Credential $cred | foreach {$_.Version}
-	if ($OSvers -like "5*"){
-	Write-Host -ForegroundColor Magenta "==[ Host OS: Windows XP $arch  ]=="
-	}
-	if ($OSvers -like "6*"){
-	Write-Host -ForegroundColor Magenta "==[ Host OS: Windows 7 $arch    ]=="
-	}
-	Write-Host -ForegroundColor Magenta "==[ "Total memory size: $mem GB" ]=="
-	Write-Host -ForegroundColor Magenta "==[ Current logged on user: $currUser ]=="
-
-	echo "=============================================="
-	echo ""
 ##Set up PSDrive mapping to remote drive
 	New-PSDrive -Name x -PSProvider filesystem -Root \\$target\c$ -Credential $cred | Out-Null
 
@@ -197,6 +207,8 @@ $OSvers = Get-WMIObject -Class Win32_OperatingSystem -ComputerName $target -Cred
 	$workingDir = $irFolder + "\$artFolder"
 	$dirList = ("$remoteIRfold\$artFolder\logs","$remoteIRfold\$artFolder\network","$remoteIRfold\$artFolder\prefetch","$remoteIRfold\$artFolder\reg")
 	New-Item -Path $dirList -ItemType Directory | Out-Null
+	
+	"==[ $targetName - $targetIP","==[ Host OS: $OSname $arch","==[ Total memory size: $mem GB","==[ Manufacturer: $mfg","==[ Model: $model","==[ System Type: $pctype","==[ Serial Number: $sernum","==[ Timezone: $tmzn","==[ Current logged on user: $currUser" | out-file $remoteIRfold\$targetName_sysinfo.txt
 
 ##connect and move software to target client
 	Write-Host -Fore Green "Copying tools...."
@@ -204,119 +216,123 @@ $OSvers = Get-WMIObject -Class Win32_OperatingSystem -ComputerName $target -Cred
 
 ##SystemInformation
 	Write-Host -Fore Green "Pulling system information...."
+	
 	Get-WMIObject Win32_LogicalDisk -ComputerName $target -Credential $cred | Select DeviceID,DriveType,@{l="Drive Size";e={$_.Size / 1GB -join ""}},@{l="Free Space";e={$_.FreeSpace / 1GB -join ""}} | Export-CSV $remoteIRfold\$artFolder\diskInfo.csv -NoTypeInformation | Out-Null
-	Get-WMIObject Win32_ComputerSystem -ComputerName $target -Credential $cred | Select Name,UserName,Domain,Manufacturer,Model,PCSystemType | Export-CSV $remoteIRfold\$artFolder\systemInfo.csv -NoTypeInformation | Out-Null
-if ($OSvers -like "5*"){
-	Get-RegValue -ComputerName $target -Key "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" -Recurse -Value ProfileImagePath | Where {$_.Key -match "S-1-5-21-"} | Select Key,Data | Export-CSV $remoteIRfold\$artFolder\userinfo.csv -NoTypeInformation | Out-Null
-	}
-else {Get-WmiObject Win32_UserProfile -ComputerName $target -Credential $cred | select Localpath,SID,LastUseTime | Export-CSV $remoteIRfold\$artFolder\users.csv -NoTypeInformation | Out-Null
-}
+	Get-WMIObject Win32_ComputerSystem -ComputerName $target -Credential $cred | Select Name,Domain,UserName,SerialNumber,Manufacturer,Model,PCSystemType | Export-CSV $remoteIRfold\$artFolder\systemInfo.csv -NoTypeInformation | Out-Null
+	
+	if ($OSvers -like "6*"){
+		Get-WmiObject Win32_UserProfile -ComputerName $target -Credential $cred | select Localpath,SID,LastUseTime | Export-CSV $remoteIRfold\$artFolder\users.csv -NoTypeInformation | Out-Null
+		}
 
 ##gather network  & adapter info
-Write-Host -Fore Green "Pulling network information...."
-Get-WMIObject Win32_NetworkAdapterConfiguration -ComputerName $target -Filter "IPEnabled='TRUE'" -Credential $cred | select DNSHostName,ServiceName,MacAddress,@{l="IPAddress";e={$_.IPAddress -join ","}},@{l="DefaultIPGateway";e={$_.DefaultIPGateway -join ","}},DNSDomain,@{l="DNSServerSearchOrder";e={$_.DNSServerSearchOrder -join ","}},Description | Export-CSV $remoteIRfold\$artFolder\network\netinfo.csv -NoTypeInformation | Out-Null
-$netstat = "cmd /c c:\windows\system32\netstat.exe -anob >> c:\netstats.txt"
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $netstat -ComputerName $target -Credential $cred | Out-Null
-$netroute = "cmd /c c:\windows\system32\netstat.exe -r > c:\routetable.txt"
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $netroute -ComputerName $target -Credential $cred | Out-Null
-$dnscache = "cmd /c c:\windows\system32\ipconfig /displaydns > c:\dnscache.txt"
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $dnscache -ComputerName $target -Credential $cred | Out-Null
-$arpdata =  "cmd /c c:\windows\system32\arp.exe -a > c:\arpdata.txt"
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $arpdata -ComputerName $target -Credential $cred | Out-Null
-$netinfo = @("x:\netstats.txt","x:\routetable.txt","x:\dnscache.txt","x:\arpdata.txt")
-Copy-Item x:\windows\system32\drivers\etc\hosts $remoteIRfold\$artFolder\network\hosts
+	Write-Host -Fore Green "Pulling network information...."
+	Get-WMIObject Win32_NetworkAdapterConfiguration -ComputerName $target -Filter "IPEnabled='TRUE'" -Credential $cred | select DNSHostName,ServiceName,MacAddress,@{l="IPAddress";e={$_.IPAddress -join ","}},@{l="DefaultIPGateway";e={$_.DefaultIPGateway -join ","}},DNSDomain,@{l="DNSServerSearchOrder";e={$_.DNSServerSearchOrder -join ","}},Description | Export-CSV $remoteIRfold\$artFolder\network\netinfo.csv -NoTypeInformation | Out-Null
+
+	$netstat = "cmd /c c:\windows\system32\netstat.exe -anob >> c:\netstats.txt"
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $netstat -ComputerName $target -Credential $cred | Out-Null
+
+	$netroute = "cmd /c c:\windows\system32\netstat.exe -r > c:\routetable.txt"
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $netroute -ComputerName $target -Credential $cred | Out-Null
+
+	$dnscache = "cmd /c c:\windows\system32\ipconfig /displaydns > c:\dnscache.txt"
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $dnscache -ComputerName $target -Credential $cred | Out-Null
+
+	$arpdata =  "cmd /c c:\windows\system32\arp.exe -a > c:\arpdata.txt"
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $arpdata -ComputerName $target -Credential $cred | Out-Null
+
+	$netinfo = @("x:\netstats.txt","x:\routetable.txt","x:\dnscache.txt","x:\arpdata.txt")
+	Copy-Item x:\windows\system32\drivers\etc\hosts $remoteIRfold\$artFolder\network\hosts
 
 ##gather Process info
-Write-Host -Fore Green "Pulling process info...."
-Get-WMIObject Win32_Process -Computername $target -Credential $cred | select-object CreationDate,ProcessName,parentprocessid,processid,@{n='Owner';e={$_.GetOwner().User}},ExecutablePath,commandline| Export-CSV $remoteIRfold\$artFolder\procs.csv -NoTypeInformation | Out-Null
+	Write-Host -Fore Green "Pulling process info...."
+	Get-WMIObject Win32_Process -Computername $target -Credential $cred | select-object CreationDate,ProcessName,parentprocessid,processid,@{n='Owner';e={$_.GetOwner().User}},ExecutablePath,commandline| Export-CSV $remoteIRfold\$artFolder\procs.csv -NoTypeInformation | Out-Null
 
+	#$procfilepath = (Get-WMIObject Win32_Process -ComputerName $target).executablepath
+	#foreach ($procfile in $procFilePath){
+	#		$convertpath = $procfile -replace "c:", "\\$target\c$"
+	#		dir $convertpath | where-object {!$_.psiscontainer } | get-Filehash -algo md5 | select hash,path | Export-Csv -NoTypeInformation -Append $remoteIRfold\$artFolder\process-hashes.csv | Out-Null
+	#		}
+		
 ##gather Services info
-Write-Host -Fore Green "Pulling service info...."
-Get-WMIObject Win32_Service -Computername $target -Credential $cred | Select processid,name,state,displayname,pathname,startmode | Export-CSV $remoteIRfold\$artFolder\services.csv -NoTypeInformation | Out-Null
+	Write-Host -Fore Green "Pulling service info...."
+	Get-WMIObject Win32_Service -Computername $target -Credential $cred | Select processid,name,state,displayname,pathname,startmode | Export-CSV $remoteIRfold\$artFolder\services.csv -NoTypeInformation | Out-Null
 
 ##gather the Java Version
-Get-WmiObject -Class CIM_Datafile -Computername $target -Credential $cred -Filter '(Name="C:\\Program Files\\Java\\jre7\\bin\\java.dll" OR Name="C:\\Program Files (x86)\\Java\\jre7\\bin\\java.dll")' | Select-Object -Property name,version | Out-File $remoteIRfold\$artFolder\java-version.txt
+	Get-WmiObject -Class CIM_Datafile -Computername $target -Credential $cred -Filter '(Name="C:\\Program Files\\Java\\jre7\\bin\\java.dll" OR Name="C:\\Program Files (x86)\\Java\\jre7\\bin\\java.dll")' | Select-Object -Property name,version | Out-File $remoteIRfold\$artFolder\java-version.txt
 
 ##gather Patch/Hotfix  info
-Get-Hotfix -ComputerName $target -Credential $cred | select-object InstalledOn,Description,HotFixID,Caption,InstalledBy | sort Installedon | Export-CSV $remoteIRfold\$artFolder\hotfixes.csv -NoTypeInformation | Out-Null
+	Get-Hotfix -ComputerName $target -Credential $cred | select-object InstalledOn,Description,HotFixID,Caption,InstalledBy | sort Installedon | Export-CSV $remoteIRfold\$artFolder\hotfixes.csv -NoTypeInformation | Out-Null
 
 ##Copy Log Files
-Write-Host -Fore Green "Pulling event logs...."
-if ($OSvers -like "5*"){
-	$xplogLoc = "x:\windows\system32\Config"
-	$xploglist = @("$xplogLoc\AppEvent.evt","$xplogLoc\SecEvent.evt","$xplogLoc\SysEvent.evt")
-	Copy-Item -Path $xploglist -Destination $remoteIRfold\$artFolder\logs\ -Force
-	}
-else {
+	Write-Host -Fore Green "Pulling event logs...."
 	$logLoc = "x:\windows\system32\Winevt\Logs"
 	$loglist = @("$logLoc\application.evtx","$logLoc\security.evtx","$logLoc\system.evtx")
 	Copy-Item -Path $loglist -Destination $remoteIRfold\$artFolder\logs\ -Force
-}
 
 ##Run AutoRunsc
-Write-Host -Fore Green "Running Autoruns analysis...."
-$autorunArgs = "-a -c -f -m * -accepteula > $workingDir\autoruns.csv"
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "cmd /c c:\Windows\temp\IR\autorunsc.exe $autorunArgs" -ComputerName $target -Credential $cred | Out-Null
-do {(Write-Host -ForegroundColor Yellow "  waiting for Autoruns to complete..."),(Start-Sleep -Seconds 15)}
-until ((Get-WMIobject -Class Win32_process -Filter "Name='autorunsc.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "autorunsc.exe"}).ProcessID -eq $null)
-Write-Host "  [done]"
+	
+	Write-Host -Fore Green "Running Autoruns analysis...."
+	$autorunArgs = "-a * -h -m -t -s -c -accepteula > $workingDir\autoruns.csv"
+	
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "cmd /c c:\Windows\temp\IR\autorunsc.exe $autorunArgs" -ComputerName $target -Credential $cred | Out-Null
+	
+	do {(Write-Host -ForegroundColor Yellow "  waiting for Autoruns to complete..."),(Start-Sleep -Seconds 15)}
+	until ((Get-WMIobject -Class Win32_process -Filter "Name='autorunsc.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "autorunsc.exe"}).ProcessID -eq $null)
+	
+	Write-Host "  [done]"
 
 
 ##Copy Prefetch files
-Write-Host -Fore Green "Pulling prefetch files...."
-Copy-Item x:\windows\prefetch\*.pf $remoteIRfold\$artFolder\prefetch -recurse
+	
+	Write-Host -Fore Green "Pulling prefetch files...."
+	
+	Copy-Item x:\windows\prefetch\*.pf $remoteIRfold\$artFolder\prefetch -recurse
 
 ##Copy $MFT
-Write-Host -Fore Green "Pulling the MFT...."
-if ($arch -like "32") 
-{
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe c:0 $workingDir" -ComputerName $target -Credential $cred | Out-Null
-}
-if ($arch -like "64") 
-{
-InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe c:0 $workingDir" -ComputerName $target -Credential $cred | Out-Null
-}
-do {(Write-Host -ForegroundColor Yellow "  waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
-until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
-Write-Host "  [done]"
+	Write-Host -Fore Green "Pulling the MFT...."
+	if ($arch -like "32") 
+	{
+		InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe c:0 $workingDir" -ComputerName $target -Credential $cred | Out-Null
+	}
+	if ($arch -like "64") 
+	{
+		InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe c:0 $workingDir" -ComputerName $target -Credential $cred | Out-Null
+	}
+	
+	do {(Write-Host -ForegroundColor Yellow "  waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
+	until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
+	
+	Write-Host "  [done]"
 
 ##Copy Reg files
-Write-Host -Fore Green "Pulling registry files...."
-$regLoc = "c:\windows\system32\config\"
-if ($arch -like "5*") 
-	{
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe $regLoc\SOFTWARE $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe $regLoc\SYSTEM $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe $regLoc\SAM $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe $regLoc\SECURITY $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
-do {(Write-Host -ForegroundColor Yellow "  waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
-until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy.exe"}).ProcessID -eq $null)
-	}
-if ($arch -like "6*") 
-	{
+	Write-Host -Fore Green "Pulling registry files...."
+	
+	$regLoc = "c:\windows\system32\config\"
+
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe $regLoc\SOFTWARE $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe $regLoc\SYSTEM $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe $regLoc\SAM $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe $regLoc\SECURITY $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
-do 	{(Write-Host -ForegroundColor Yellow "  waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
-until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
-	}
+
+	do 	{(Write-Host -ForegroundColor Yellow "  waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
+	until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
+			
 	Write-Host "  [done]"
 
 ##Copy Symantec Quarantine Files (default location)##
-$symQ = "x:\ProgramData\Symantec\Symantec Endpoint Protection\*\Data\Quarantine"
-if (Test-Path -Path "$symQ\*.vbn") {
-	Write-Host -Fore Green "Pulling Symantec Quarantine files...."
-	New-Item -Path $remoteIRfold\$artFolder\SymantecQuarantine -ItemType Directory  | Out-Null
-	Copy-Item -Path "$symQ\*" $remoteIRfold\$artFolder\SymantecQuarantine -Force -Recurse
-	}
-else
-	{
-	Write-Host -Fore Red "No Symantec Quarantine files...."
-	}
+	$symQ = "x:\ProgramData\Symantec\Symantec Endpoint Protection\1*\Data\Quarantine"
+	if (Test-Path -Path "$symQ\*.vbn") {
+		Write-Host -Fore Green "Pulling Symantec Quarantine files...."
+		New-Item -Path $remoteIRfold\$artFolder\SymantecQuarantine -ItemType Directory  | Out-Null
+		Copy-Item -Path "$symQ\*" $remoteIRfold\$artFolder\SymantecQuarantine -Force -Recurse
+		}
+	else
+		{
+		Write-Host -Fore Red "No Symantec Quarantine files...."
+		}
 
 ##Copy Symantec Log Files (default location)##
-$symLog = "x:\ProgramData\Symantec\Symantec Endpoint Protection\*\Data\Logs"
+$symLog = "x:\ProgramData\Symantec\Symantec Endpoint Protection\1*\Data\Logs"
 if (Test-Path -Path "$symLog\*.log") {
 	Write-Host -Fore Green "Pulling Symantec Log files...."
 	New-Item -Path $remoteIRfold\$artFolder\SymantecLogs -ItemType Directory  | Out-Null
@@ -359,9 +375,8 @@ else
 	Write-Host -Fore Magenta ">>>[Pulling user profile items]<<<"
 	echo "=============================================="
 
-###################
-#####!!!<<<<<Win7>>>>>>!!!!#######
-###################
+
+##Determine User Profiles
 if ($OSvers -like "6*"){
 		$W7path = "x:\users"
 		$localprofiles = Get-WMIObject Win32_UserProfile -filter "Special != 'true'" -ComputerName $target -Credential $cred | Where {$_.LocalPath -and ($_.ConvertToDateTime($_.LastUseTime)) -gt (get-date).AddDays(-15) }
@@ -377,15 +392,13 @@ if ($OSvers -like "6*"){
 			Write-Host -Fore Green "  Pulling NTUSER.DAT file for $user...."
 			New-Item -Path $remoteIRfold\$artFolder\users\$user -ItemType Directory  | Out-Null
 			InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe $source $destination" -ComputerName $target -Credential $cred | Out-Null
-			gci $w7path\$user -Include *.exe,*.dll,*.zip,*.tmp -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userhashes.csv
-			gci $w7path\$user -Include *.exe,*.dll,*.zip,*.tmp -Recurse -Force -File -ErrorAction SilentlyContinue | select @{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}} | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\hashesRaw.csv
-			$hashcount = (gci $temppath -Include *.exe,*.dll,*.zip,*.tmp -Recurse -Force -File -ErrorAction SilentlyContinue).count
-			Write-Host "$hashcount user hashes"
+			#dir $w7path\$user -Recurse | where-object {!$_.psiscontainer } | get-Filehash -algo md5 | select hash,pathdir  | Export-Csv -NoTypeInformation -Append $remoteIRfold\$artFolder\user-hashes.csv
+			#gci $w7path\$user -Include *.exe,*.dll,*.zip,*.tmp -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userhashes.csv
+			#Write-Host "$hashcount user hashes"
 
 ##Pull IDX Files##
 		$W7idxpath = "$W7path\$user\AppData\LocalLow\Sun\Java\Deployment\cache\6.0\"
-		gci $W7idxpath -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userhashes.csv
-		gci $W7idxpath -Recurse -Force -File -ErrorAction SilentlyContinue | select @{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}} | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\hashesRaw.csv
+		#gci $W7idxpath -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userIDXhashes.csv
 		if(Test-Path $W7idxpath -PathType Container) {
 			Write-Host -Fore Green "  Pulling IDX files for $user....(W7)"
 			$idxFiles = Get-ChildItem -Path $W7idxpath -Filter "*.idx" -Force -Recurse | Where-Object {$_.Length -gt 0 -and $_.LastWriteTime -gt (get-date).AddDays(-15)} | foreach {$_.Fullname}
@@ -438,93 +451,10 @@ if ($OSvers -like "6*"){
 			}
 		else {
 		 Write-Host -Fore Red "  No Chrome Internet History files $user...."
-		 }
-	}
-}
-
-#####################
-#####!!!<<<<<WinXP>>>>>>!!!!#######
-####################
-
-else {
-		$XPpath = "x:\documents and settings"
-		$XPprofiles = Get-ChildItem -Path "x:\Documents and settings\" -Force -Exclude "All Users" | Where-Object {$_.Length -gt 0 -and $_.LastWriteTime -gt (get-date).AddDays(-15)} | foreach {$_.Fullname}
-		foreach ($XPprofile in $XPprofiles){
-		$source = $XPprofile + "\ntuser.dat"
-		$eof = $XPprofile.Length
-		$last = $XPprofile.LastIndexOf('\')
-		$count = $eof - $last
-		$xpuser = $XPprofile.Substring($last,$count)
-		$destination = "$workingDir\users" + $xpuser
-		echo ""
-		Write-Host -ForegroundColor Magenta "Pulling items for >> [ $xpuser ]"
-		Write-Host -Fore Green "  Pulling NTUSER.DAT file for $xpuser...."
-		New-Item -Path $remoteIRfold\$artFolder\users\$xpuser -ItemType Directory  | Out-Null
-		InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe $source $destination" -ComputerName $target -Credential $cred | Out-Null
-		gci $XPpath\$user -Include *.exe,*.dll,*.zip,*.tmp. -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -append -NoTypeInformation $remoteIRfold\$artFolder\userhashes.csv
-		gci $XPpath\$user -Include *.exe,*.dll,*.zip,*.tmp. -Recurse -Force -File -ErrorAction SilentlyContinue | select @{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | Export-CSV -NoTypeInformation -Append $remoteIRfold\$artFolder\hashesRaw.csv
-		$hashcount = (gci $XPprofile -Include *.exe,*.dll,*.zip,*.tmp. -Recurse -Force -File -ErrorAction SilentlyContinue).count
-		Write-Host "$hashcount user hashes"
-	
-##Pull XP IDX files##
-		$XPidxpath = "$XPpath\$xpuser\Application Data\Sun\Java\Deployment\cache\6.0\"
-		gci $XPidxpath -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userhashes.csv
-		gci $XPidxpath -Recurse -Force -File -ErrorAction SilentlyContinue | select @{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}} | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\hashesRaw.csv
-		if (Test-Path -Path $XPidxpath -PathType Container) {
-			Write-Host -Fore Green "  Pulling IDX files for $xpuser....(XP)"
-			$idxFiles = Get-ChildItem -Path $XPidxpath -Filter "*.idx" -Force -Recurse | Where-Object {$_.Length -gt 0 -and $_.LastWriteTime -gt (get-date).AddDays(-15)} | foreach {$_.Fullname}
-			Write-Host -Fore Yellow "    pulling IDX files...."
-			New-Item -Path $remoteIRfold\$artFolder\users\$user\idx -ItemType Directory  | Out-Null
-			foreach ($idx in $idxFiles){
-				Copy-Item -Path $idx -Destination $remoteIRfold\$artFolder\users\$xpuser\idx -recurse
-				}
-			}
-		else {
-	 	 	Write-Host -Fore Red "  No IDX files newer than 15 days for $xpuser...."
-	 	 }
-##Copy Internet History files##	
-		$XPinet = "$XPpath\$xpuser\Local Settings\History\"
-		Write-Host -Fore Green "  Pulling Internet Explorer History files for $xpuser...."
-		New-Item -Path $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\IE -ItemType Directory | Out-Null
-		$inethist = Get-ChildItem -Path $XPinet -Recurse -Force | foreach {$_.Fullname}
-		foreach ($inet in $inethist) {
-			Copy-Item -Path $inet -Destination $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\IE -Force -Recurse
-			}
-
-##Copy FireFox History files##
-	$XPfoxpath = "$XPpath\$xpuser\Application Data\Mozilla\Firefox\profiles"
-		if (Test-Path -Path $XPfoxpath -PathType Container) {
-			Write-Host -Fore Green "  Pulling FireFox Internet History files (XP) for $xpuser...."
-			New-Item -Path $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\Firefox -ItemType Directory  | Out-Null
-			$ffinet = Get-ChildItem $XPfoxpath -Filter "places.sqlite" -Force -Recurse | foreach {$_.Fullname}
-			Foreach ($ffi in $ffinet) {
-				Copy-Item -Path $ffi -Destination $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\Firefox
-				$ffdown = Get-ChildItem $XPfoxpath -Filter "downloads.sqlite" -Force -Recurse | foreach {$_.Fullname}
-				}
-				Foreach ($ffd in $ffdown) {
-					Copy-Item -Path $ffd -Destination $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\Firefox
-				}
-			}
-	else {
-		 Write-Host -Fore Red "  No FireFox Internet History files for $xpuser...."
-	 	 }
-
-##Copy Chrome History files##
-		$XPchromepath = "$XPpath\$xpuser\Local Settings\Application Data\Google\Chrome\User Data\Default"
-		if (Test-Path -Path $XPchromepath -PathType Container) {
-			Write-Host -Fore Green "  Pulling Chrome Internet History files for $xpuser....(XP)"
-			New-Item -Path $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\Chrome -ItemType Directory  | Out-Null
-			$chromeInet = Get-ChildItem $XPchromepath -Filter "History" -Force -Recurse | foreach {$_.Fullname}
-			Foreach ($chrmi in $chromeInet) {
-				Copy-Item -Path $chrmi -Destination $remoteIRfold\$artFolder\users\$xpuser\InternetHistory\Chrome
-				}
-			}
-		else {
-		 	Write-Host -Fore Red "  No Chrome Internet History files $xpuser...."
 		 	}
+			}
 		}
-}
-
+	
 Get-ChildItem $remoteIRfold -Force -Recurse | Export-CSV $remoteIRfold\$artFolder\FileReport.csv
 echo ""
 Write-Host -Fore Magenta ">>>[Tactical pause]<<<"
