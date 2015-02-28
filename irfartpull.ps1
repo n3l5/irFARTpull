@@ -212,7 +212,15 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 ##connect and move software to target client
 	Write-Host -Fore Green "Copying tools...."
-	Copy-Item $toolsDir\*.* $remoteIRfold -recurse
+	
+	Copy-Item $toolsDir\7za.exe $remoteIRfold
+	
+	if ($arch -like "64"){
+		Copy-Item $toolsDir\RawCopy64.exe $remoteIRfold
+		}
+	elseif ($arch -like "32"){
+		Copy-Item $toolsDir\RawCopy.exe $remoteIRfold
+		}
 
 ##SystemInformation
 	Write-Host -Fore Green "Pulling system information...."
