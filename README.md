@@ -3,7 +3,7 @@ IR Forensic ARTifact pull (irFArtpull)
 
 DESCRIPTION:
 
-irFARTpull is a PowerShell script utilized to pull several forensic artifacts from a live Win7 & Win8 systems on your network. 
+irFARTpull is a PowerShell script utilized to pull several forensic artifacts from a live Windows 7, 8, Server 2008, and Server 2012 systems on your network. 
 		
 Artifacts it grabs:
 - Disk Information
