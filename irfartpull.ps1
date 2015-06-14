@@ -154,10 +154,10 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	$mfg = Get-WmiObject -class Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty manufacturer
 	$model = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty model
 	$pctype = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty PCSystemType
-	$sernum = Get-wmiobject Win32_Bios -ComputerName $target -Credential $cred | select -ExpandProperty SerialNumber
+	$sernum = Get-Wmiobject Win32_Bios -ComputerName $target -Credential $cred | select -ExpandProperty SerialNumber
 	$tmzn = Get-WmiObject -class Win32_TimeZone -Computer $target -Credential $cred | select -ExpandProperty caption
 #Display logged in user info (if any)	
-	if ($expproc = gwmi win32_process -computer $target -Credential $cred -Filter "Name = 'explorer.exe'") {
+	if ($expproc = Get-WmiObject win32_process -computer $target -Credential $cred -Filter "Name = 'explorer.exe'") {
 		$exuser = ($expproc.GetOwner()).user
 		$exdom = ($expproc.GetOwner()).domain
 		$currUser = "$exdom" + "\$exuser" }
