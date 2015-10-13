@@ -125,7 +125,7 @@ $compCred = "$target" + "\$username"
 
 	Write-Host -Fore Yellow ">>>>> Testing connection to $target...."
 	echo ""
-	if ((!(Test-Connection -Cn $target -Count 2 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
+	if ((!(Test-Connection -Cn $target -Count 3 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
 		Write-Host -Foreground Magenta "$target appears to be down"
 		}
 
@@ -212,15 +212,8 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 ##connect and move software to target client
 	Write-Host -Fore Green "Copying tools...."
-	
-	Copy-Item $toolsDir\7za.exe $remoteIRfold
-	
-	if ($arch -like "64"){
-		Copy-Item $toolsDir\RawCopy64.exe $remoteIRfold
-		}
-	elseif ($arch -like "32"){
-		Copy-Item $toolsDir\RawCopy.exe $remoteIRfold
-		}
+
+	Copy-Item $toolsDir\*.* $remoteIRfold -recurse
 
 ##SystemInformation
 	Write-Host -Fore Green "Pulling system information...."
@@ -280,7 +273,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 ##Run AutoRunsc
 	
 	Write-Host -Fore Green "Running Autoruns analysis...."
-	$autorunArgs = "-a * -h -m -t -s -c -accepteula > $workingDir\autoruns.csv"
+	$autorunArgs = "-a * -h -m -n -t -s -c -accepteula > $workingDir\autoruns.csv"
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "cmd /c c:\Windows\temp\IR\autorunsc.exe $autorunArgs" -ComputerName $target -Credential $cred | Out-Null
 	
