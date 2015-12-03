@@ -273,7 +273,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 ##Run AutoRunsc
 	
 	Write-Host -Fore Green "Running Autoruns analysis...."
-	$autorunArgs = "-a * -h -m -n -t -s -c -accepteula > $workingDir\autoruns.csv"
+	$autorunArgs = "-a * -h -m -s -t -c * -accepteula > $workingDir\autoruns.csv"
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "cmd /c c:\Windows\temp\IR\autorunsc.exe $autorunArgs" -ComputerName $target -Credential $cred | Out-Null
 	
