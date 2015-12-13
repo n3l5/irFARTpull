@@ -16,7 +16,8 @@ Artifacts it grabs:
 - Services
 - Event Logs (System, Security, Application)
 - Prefetch Files
-- MFT$
+- $MFT
+- NTFS $LogFile
 - Registry Files
 - User NTUSER.dat files
 - Java IDX files
@@ -46,3 +47,4 @@ Various tools for analysis of the artifacts:
 - RegRipper - Tool for extracting data from Registry and NTUSER.dat files. https://code.google.com/p/regripper/
 - WinPrefetchView - utility to read Prefetch files. http://www.nirsoft.net/utils/win_prefetch_view.html
 - MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
+- Triforce ANJP - tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
