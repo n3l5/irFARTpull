@@ -17,6 +17,7 @@ Artifacts it grabs:
 	- Event Logs (System, Security, Application)
 	- Prefetch Files
 	- MFT$
+	- NTFS LogFile
 	- Registry Files
 	- User NTUSER.dat files
 	- Java IDX files
@@ -64,6 +65,7 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 	RegRipper - Tool for extracting data from Registry and NTUSER.dat files. https://code.google.com/p/regripper/
 	WinPrefetchView - utility to read Prefetch files. http://www.nirsoft.net/utils/win_prefetch_view.html
 	MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
+	Triforce ANJP - tool to examining the MFT, LogFile, and USN.
 
 #>
 Param(
@@ -301,6 +303,23 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	}
 	
 	do {(Write-Host -ForegroundColor Yellow "  waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
+	until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
+	
+	Write-Host "  [done]"
+
+##Copy $LogFile
+
+	Write-Host -Fore Green "Pulling the NTFS Logfile...."
+	if ($arch -like "32") 
+	{
+		InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy.exe c:2 $workingDir" -ComputerName $target -Credential $cred | Out-Null
+	}
+	if ($arch -like "64") 
+	{
+		InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\RawCopy64.exe c:2 $workingDir" -ComputerName $target -Credential $cred | Out-Null
+	}
+	
+	do {(Write-Host -ForegroundColor Yellow "  waiting for LogFile copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-WMIobject -Class Win32_process -Filter "Name='RawCopy64.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "RawCopy64.exe"}).ProcessID -eq $null)
 	
 	Write-Host "  [done]"
