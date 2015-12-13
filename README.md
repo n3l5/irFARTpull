@@ -28,6 +28,7 @@ When done collecting the artifacts, it will 7zip the data and yank the info off 
 NOTEs: 
 - All testing done on PowerShell v3 oe v4
 - Requires RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
+- Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins.
 - Requires 7za.exe (7zip cmd line) for compression w/ password protection
 	
 Assumed Directories:
@@ -41,6 +42,7 @@ irFARTpull main - https://github.com/n3l5/irFARTpull
 	
 Links to required tools:
 - RawCopy64.exe - Part of the mft2csv suite, RawCopy can be downloaded here: https://code.google.com/p/mft2csv/
+- Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins. https://technet.microsoft.com/en-us/sysinternals/bb963902.aspx
 - 7za.exe - Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
 	
 Various tools for analysis of the artifacts:
