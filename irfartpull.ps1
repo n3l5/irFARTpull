@@ -48,7 +48,7 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 	Requires 7za.exe (7zip cmd line) for compression w/ password protection
 	
 	Assumed Directories:
-	c:\tools\resp\ - where the RawCopy64.exe and 7za.exe exist
+	c:\tools\resp\ - where the RawCopy64.exe, Autorunsc.exe, and 7za.exe exist
 	c:\windows\temp\IR - Where the work will be done/copied
 		
 	Must be ran as a user that will have Admin creds on the remote system. The assumption is that the target system is part of a domain.
@@ -59,6 +59,7 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 	
 	Links to required tools:
 	mft2csv - Part of the mft2csv suite, RawCopy can be downloaded here: https://code.google.com/p/mft2csv/
+	Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins.
 	7-Zip - Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
 		
 	Various tools for analysis of the artifacts:
