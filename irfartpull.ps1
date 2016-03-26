@@ -149,50 +149,42 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	Write-Host -Foregroundcolor Cyan "  -Mail notification off-"
 		}
 
+#Set up DCOM connection (no remote WSMan)
+	$dcom = New-CimsessionOption -Protocol DCOM
+
+#Set up Cimsession on $target via DCOM
+	$ir = new-cimsession -ComputerName $target -Credential $cred -SessionOption $dcom
+
 #Get system info
-	$targetName = Get-WMIObject -class Win32_ComputerSystem -ComputerName $target -Credential $cred | ForEach-Object Name
-	$targetIP = Get-WMIObject -class Win32_NetworkAdapterConfiguration -ComputerName $target -Credential $cred -Filter "IPEnabled='TRUE'" | Where {$_.IPAddress} | Select -ExpandProperty IPAddress | Where{$_ -notlike "*:*"}
-	$OSname = (Get-WmiObject Win32_OperatingSystem -Computer $target -Credential $cred).caption
-	$mem = Get-WMIObject -class Win32_PhysicalMemory -ComputerName $target -Credential $cred | Measure-Object -Property capacity -Sum | % {[Math]::Round(($_.sum / 1GB),2)} 
-	$mfg = Get-WmiObject -class Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty manufacturer
-	$model = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty model
-	$pctype = Get-WmiObject Win32_Computersystem -ComputerName $target -Credential $cred | select -ExpandProperty PCSystemType
-	$sernum = Get-Wmiobject Win32_Bios -ComputerName $target -Credential $cred | select -ExpandProperty SerialNumber
-	$tmzn = Get-WmiObject -class Win32_TimeZone -Computer $target -Credential $cred | select -ExpandProperty caption
-#Display logged in user info (if any)	
-	if ($expproc = Get-WmiObject win32_process -computer $target -Credential $cred -Filter "Name = 'explorer.exe'") {
-		$exuser = ($expproc.GetOwner()).user
-		$exdom = ($expproc.GetOwner()).domain
-		$currUser = "$exdom" + "\$exuser" }
-	else { 
-		$currUser = "NONE" 
-		}
+	$targetName = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Name
+	$targetIP = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Cimsession $ir | select * | Where {$_.IPenabled -eq "true"} | Where {$_.IPAddress} | Select -ExpandProperty IPAddress | Where{$_ -notlike "*:*"}
+	$domain = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Domain
+	$OSname = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % Caption
+	$mem = Get-CimInstance -ClassName Win32_PhysicalMemory -Cimsession $ir | Measure-Object -Property capacity -Sum | % {[Math]::Round(($_.sum / 1GB),2)}
+	$mfg = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Manufacturer
+	$model = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Model
+	$pctype = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % pcsystemtype
+	$sernum = Get-CimInstance -ClassName Win32_Bios -Cimsession $ir | % SerialNumber
+	$tmzn = Get-CimInstance -ClassName Win32_TimeZone -Cimsession $ir | % Caption
+	$currUser = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Username
+	$arch = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % OSArchitecture
+	$OSvers = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % version
+		
 	echo ""
 	echo "=============================================="
-	
 	Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
-
-##Determine x32 or x64
-
-	$arch = Get-WmiObject -Class Win32_Processor -ComputerName $target -Credential $cred | foreach {$_.AddressWidth}
-
-#Determine XP or Win7
-	
-	$OSvers = Get-WMIObject -Class Win32_OperatingSystem -ComputerName $target -Credential $cred | foreach {$_.Version}
-	
-	if ($OSvers -like "6*"){
-		Write-Host -ForegroundColor Magenta "==[ Host OS: $OSname $arch"
-		}
-		Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
-		Write-Host -ForegroundColor Magenta "==[ Total memory size: $mem GB"
-		Write-Host -ForegroundColor Magenta "==[ Manufacturer: $mfg"
-		Write-Host -ForegroundColor Magenta "==[ Model: $model"
-		Write-Host -ForegroundColor Magenta "==[ System Type: $pctype"
-		Write-Host -ForegroundColor Magenta "==[ Serial Number: $sernum"
-		Write-Host -ForegroundColor Magenta "==[ Timezone: $tmzn"
-		Write-Host -ForegroundColor Magenta "==[ Current logged on user: $currUser"
-		echo "=============================================="
-		echo ""
+	Write-Host -ForegroundColor Magenta "==[ Host OS: $OSname $arch"
+	Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
+	Write-Host -ForegroundColor Magenta "==[ Domain: $domain"
+	Write-Host -ForegroundColor Magenta "==[ Total memory size: $mem GB"
+	Write-Host -ForegroundColor Magenta "==[ Manufacturer: $mfg"
+	Write-Host -ForegroundColor Magenta "==[ Model: $model"
+	Write-Host -ForegroundColor Magenta "==[ System Type: $pctype"
+	Write-Host -ForegroundColor Magenta "==[ Serial Number: $sernum"
+	Write-Host -ForegroundColor Magenta "==[ Timezone: $tmzn"
+	Write-Host -ForegroundColor Magenta "==[ Current logged on user: $currUser"
+	echo "=============================================="
+	echo ""
 
 ################
 ##Set up environment on remote system. IR folder for tools and art folder for artifacts.##
@@ -211,22 +203,18 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	$dirList = ("$remoteIRfold\$artFolder\logs","$remoteIRfold\$artFolder\network","$remoteIRfold\$artFolder\prefetch","$remoteIRfold\$artFolder\reg")
 	New-Item -Path $dirList -ItemType Directory | Out-Null
 	
-	"==[ $targetName - $targetIP","==[ Host OS: $OSname $arch","==[ Total memory size: $mem GB","==[ Manufacturer: $mfg","==[ Model: $model","==[ System Type: $pctype","==[ Serial Number: $sernum","==[ Timezone: $tmzn","==[ Current logged on user: $currUser" | out-file $remoteIRfold\$targetName_sysinfo.txt
+	"==[ $targetName - $targetIP","==[ Host OS: $OSname $arch","==[ Domain: $domain","==[ Total memory size: $mem GB","==[ Manufacturer: $mfg","==[ Model: $model","==[ System Type: $pctype","==[ Serial Number: $sernum","==[ Timezone: $tmzn","==[ Current logged on user: $currUser" | out-file $remoteIRfold\$targetName_sysinfo.txt
 
 ##connect and move software to target client
 	Write-Host -Fore Green "Copying tools...."
-
 	Copy-Item $toolsDir\*.* $remoteIRfold -recurse
 
 ##SystemInformation
 	Write-Host -Fore Green "Pulling system information...."
 	
-	Get-WMIObject Win32_LogicalDisk -ComputerName $target -Credential $cred | Select DeviceID,DriveType,@{l="Drive Size";e={$_.Size / 1GB -join ""}},@{l="Free Space";e={$_.FreeSpace / 1GB -join ""}} | Export-CSV $remoteIRfold\$artFolder\diskInfo.csv -NoTypeInformation | Out-Null
-	Get-WMIObject Win32_ComputerSystem -ComputerName $target -Credential $cred | Select Name,Domain,UserName,SerialNumber,Manufacturer,Model,PCSystemType | Export-CSV $remoteIRfold\$artFolder\systemInfo.csv -NoTypeInformation | Out-Null
-	
-	if ($OSvers -like "6*"){
-		Get-WmiObject Win32_UserProfile -ComputerName $target -Credential $cred | select Localpath,SID,LastUseTime | Export-CSV $remoteIRfold\$artFolder\users.csv -NoTypeInformation | Out-Null
-		}
+	Get-CimInstance -ClassName Win32_DiskDrive -Cimsession $ir | Format-Table -auto @{Label="DeviceID";Expression={$_.DeviceID};Align="Left"},@{Label="S/N";Expression={$_.serialnumber};Align="Left"},@{Label="Partitions";Expression={$_.partitions};Align="Left"},@{Label="Size(GB)";Expression={"{0:N0}" -f ($_.Size / 1GB)};Align="Left"},@{Label="MediaType";Expression={$_.MediaType};Align="Left"},@{Label="Interfacetype";Expression={$_.Interfacetype};Align="Left"},@{Label="Model";Expression={$_.Model};Align="Left"} | Out-File -Append $remoteIRfold\$targetName_sysinfo.txt
+	Get-CimInstance -ClassName Win32_LogicalDisk -Cimsession $ir | Format-Table -auto @{Label="Drive";Expression={$_.DeviceID};Align="Right"},@{Label="Free(GB)";Expression={"{0:N0}" -f ($_.FreeSpace/1GB)};Align="Right"},@{Label="Size(GB)";Expression={"{0:N0}" -f ($_.Size / 1GB)};Align="Right"},@{Label="% Free";Expression={"{0:P0}" -f ($_.FreeSpace / $_.Size)};Align="Right"},@{Label="FileSystem";Expression={$_.Filesystem};Width=25},@{Label="Volume S/N";Expression={$_.VolumeSerialNumber};Width=25},@{Label="Volume Desc";Expression={$_.Description};Width=25} | Out-File -Append $remoteIRfold\$targetName_sysinfo.txt
+	Get-CimInstance -ClassName Win32_UserProfile  -Cimsession $ir | Format-Table -auto @{Label="LastUseTime";Expression={$_.LastUseTime};Align="Left"},@{Label="Localpath";Expression={$_.Localpath};Align="Left"},@{Label="SID";Expression={$_.SID};Align="Left"},@{Label="Loaded";Expression={$_.Loaded};Align="Left"},@{Label="Refcount";Expression={$_.Refcount};Align="Left"},@{Label="Special";Expression={$_.Special};Align="Left"} | Out-File -Append $remoteIRfold\$targetName_sysinfo.txt
 
 ##gather network  & adapter info
 	Write-Host -Fore Green "Pulling network information...."
@@ -521,6 +509,9 @@ echo ""
 Write-Host -Fore Green "Removing the working environment...."
 Remove-Item $remoteIRfold -Recurse -Force 
 echo ""
+
+##Remove CimSession
+Get-CimSession | Remove-CimSession
 
 ##Disconnect the PSDrive X mapping##
 Remove-PSDrive X
