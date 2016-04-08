@@ -173,6 +173,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	$currUser = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Username
 	$arch = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % OSArchitecture
 	$OSvers = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % version
+	$osinstall = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % installdate
 		
 	echo ""
 	echo "=============================================="
@@ -186,6 +187,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	Write-Host -ForegroundColor Magenta "==[ System Type: $pctype"
 	Write-Host -ForegroundColor Magenta "==[ Serial Number: $sernum"
 	Write-Host -ForegroundColor Magenta "==[ Timezone: $tmzn"
+	Write-Host -ForegroundColor Magenta "==[ OS InstallDate: $osinstall"
 	Write-Host -ForegroundColor Magenta "==[ Current logged on user: $currUser"
 	echo "=============================================="
 	echo ""
@@ -212,7 +214,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	New-Item -Path $localdirList -ItemType Directory | Out-Null
 	New-Item -Path $dirList -ItemType Directory | Out-Null
 	
-	"==[ $targetName - $targetIP","==[ Host OS: $OSname $arch","==[ Domain: $domain","==[ Total memory size: $mem GB","==[ Manufacturer: $mfg","==[ Model: $model","==[ System Type: $pctype","==[ Serial Number: $sernum","==[ Timezone: $tmzn","==[ Current logged on user: $currUser" | out-file $sysInfofile -width 4096 
+	"==[ $targetName - $targetIP","==[ Host OS: $OSname $arch","==[ Domain: $domain","==[ Total memory size: $mem GB","==[ Manufacturer: $mfg","==[ Model: $model","==[ System Type: $pctype","==[ Serial Number: $sernum","==[ Timezone: $tmzn","==[ OS InstallDate: $osinstall","==[ Current logged on user: $currUser" | out-file $sysInfofile -width 4096 
 
 ##connect and move software to target client
 	Write-Host -Fore Green "Copying tools...."
@@ -223,7 +225,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	
 	Get-CimInstance -ClassName Win32_DiskDrive -Cimsession $ir | Format-Table -auto @{Label="DeviceID";Expression={$_.DeviceID};Align="Left"},@{Label="S/N";Expression={$_.serialnumber};Align="Left"},@{Label="Partitions";Expression={$_.partitions};Align="Left"},@{Label="Size(GB)";Expression={"{0:N0}" -f ($_.Size / 1GB)};Align="Left"},@{Label="MediaType";Expression={$_.MediaType};Align="Left"},@{Label="Interfacetype";Expression={$_.Interfacetype};Align="Left"},@{Label="Model";Expression={$_.Model};Align="Left"} | Out-File -Append $sysInfofile -width 4096
 	Get-CimInstance -ClassName Win32_LogicalDisk -Cimsession $ir | Format-Table -auto @{Label="Drive";Expression={$_.DeviceID};Align="Right"},@{Label="Free(GB)";Expression={"{0:N0}" -f ($_.FreeSpace/1GB)};Align="Right"},@{Label="Size(GB)";Expression={"{0:N0}" -f ($_.Size / 1GB)};Align="Right"},@{Label="% Free";Expression={"{0:P0}" -f ($_.FreeSpace / $_.Size)};Align="Right"},@{Label="FileSystem";Expression={$_.Filesystem};Width=25},@{Label="Volume S/N";Expression={$_.VolumeSerialNumber};Width=25},@{Label="Volume Desc";Expression={$_.Description};Width=25} | Out-File -Append $sysInfofile -width 4096
-	Get-CimInstance -ClassName Win32_UserProfile  -Cimsession $ir | Format-Table -auto @{Label="LastUseTime";Expression={$_.LastUseTime};Align="Left"},@{Label="Localpath";Expression={$_.Localpath};Align="Left"},@{Label="SID";Expression={$_.SID};Align="Left"},@{Label="Loaded";Expression={$_.Loaded};Align="Left"},@{Label="Refcount";Expression={$_.Refcount};Align="Left"},@{Label="Special";Expression={$_.Special};Align="Left"} | Out-File -Append $sysInfofile -width 4096
+	Get-CimInstance -ClassName Win32_UserProfile -Cimsession $ir | Format-Table -auto @{Label="LastUseTime";Expression={$_.LastUseTime};Align="Left"},@{Label="Localpath";Expression={$_.Localpath};Align="Left"},@{Label="SID";Expression={$_.SID};Align="Left"},@{Label="Loaded";Expression={$_.Loaded};Align="Left"},@{Label="Refcount";Expression={$_.Refcount};Align="Left"},@{Label="Special";Expression={$_.Special};Align="Left"} | Out-File -Append $sysInfofile -width 4096
 
 ##gather network  & adapter info
 	Write-Host -Fore Green "Pulling network information...."
@@ -246,23 +248,25 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 ##gather Process info
 	Write-Host -Fore Green "Pulling process info...."
-	Get-WMIObject Win32_Process -Computername $target -Credential $cred | select-object CreationDate,ProcessName,parentprocessid,processid,@{n='Owner';e={$_.GetOwner().User}},ExecutablePath,commandline| Export-CSV $remoteIRfold\$artFolder\procs.csv -NoTypeInformation
 
-	#$procfilepath = (Get-WMIObject Win32_Process -ComputerName $target).executablepath
-	#foreach ($procfile in $procFilePath){
-	#		$convertpath = $procfile -replace "c:", "\\$target\c$"
-	#		dir $convertpath | where-object {!$_.psiscontainer } | get-Filehash -algo md5 | select hash,path | Export-Csv -NoTypeInformation -Append $remoteIRfold\$artFolder\process-hashes.csv | Out-Null
-	#		}
-		
+	Get-CimInstance -ClassName Win32_Process -Cimsession $ir | foreach {
+	$owner = Invoke-CimMethod -InputObject $PSItem -MethodName GetOwner
+	$props = [ordered]@{
+	Name = $psitem.name
+	Domain = $owner.Domain
+	User = $owner.User
+	CreateDate = $psitem.CreationDate
+	ProcessID = $psitem.processid
+	ParentProcessID = $psitem.ParentProcessId
+	ExecutablePath = $psitem.ExecutablePath
+	CommandLine = $psitem.CommandLine
+	}
+	New-Object -TypeName PSobject -Property $props | Export-CSV $dumpDir\$artFolder\procs.csv -NoTypeInformation -Append
+	}
+
 ##gather Services info
 	Write-Host -Fore Green "Pulling service info...."
-	Get-CimInstance -ClassName Win32_Service -Cimsession $ir | Format-Table -auto @{Label="ProcessID";Expression={$_.processid};Align="Left"},@{Label="Startname";Expression={$_.startname};Align="Left"},@{Label="State";Expression={$_.state};Align="Left"},@{Label="Name";Expression={$_.name};Align="Left"},@{Label="State";Expression={$_.state};Align="Left"},@{Label="Displayname";Expression={$_.displayname};Align="Left"},@{Label="PathName";Expression={$_.pathname};Align="Left"},@{Label="StartMode";Expression={$_.startmode};Align="Left"} | Export-CSV $dumpDir\$artFolder\services.csv -NoTypeInformation | Out-Null
-
-##gather the Java Version
-	Get-WmiObject -Class CIM_Datafile -Computername $target -Credential $cred -Filter '(Name="C:\\Program Files\\Java\\jre7\\bin\\java.dll" OR Name="C:\\Program Files (x86)\\Java\\jre7\\bin\\java.dll")' | Select-Object -Property name,version | Out-File $dumpDir\$artFolder\java-version.txt
-
-##gather Patch/Hotfix  info
-	Get-Hotfix -ComputerName $target -Credential $cred | select-object InstalledOn,Description,HotFixID,Caption,InstalledBy | sort Installedon | Export-CSV $dumpDir\$artFolder\hotfixes.csv -NoTypeInformation
+	Get-CimInstance -ClassName Win32_Service -Cimsession $ir | select processid,startname,state,name,displayname,pathname,startmode | Export-CSV $dumpDir\$artFolder\services.csv -NoTypeInformation
 
 ##Copy Log Files
 	Write-Host -Fore Green "Pulling event logs...."
@@ -271,13 +275,13 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	Copy-Item -Path $loglist -Destination $remoteIRfold\$artFolder\logs\ -Force
 
 ##Run AutoRunsc
-	
+
 	Write-Host -Fore Green "Running Autoruns analysis...."
 	$autorunArgs = "-a * -h -m -s -t -c * -accepteula > $workingDir\autoruns.csv"
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "cmd /c c:\Windows\temp\IR\autorunsc.exe $autorunArgs" -ComputerName $target -Credential $cred | Out-Null
 	
-	do {(Write-Host -ForegroundColor Yellow "  waiting for Autoruns to complete..."),(Start-Sleep -Seconds 15)}
+	do {(Write-Host -ForegroundColor Yellow "   waiting for Autoruns to complete..."),(Start-Sleep -Seconds 15)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'autorunsc'}).ProcessID -eq $null)
 	
 	Write-Host "  [done]"
@@ -304,7 +308,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy c:0 $diskDir" -ComputerName $target -Credential $cred | Out-Null
 	
-	do {(Write-Host -ForegroundColor Yellow "  waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
+	do {(Write-Host -ForegroundColor Yellow "   waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
 		
 	Write-Host "  [done]"
@@ -315,7 +319,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy c:2 $diskDir" -ComputerName $target -Credential $cred | Out-Null
 	
-	do {(Write-Host -ForegroundColor Yellow "  waiting for LogFile copy to complete..."),(Start-Sleep -Seconds 5)}
+	do {(Write-Host -ForegroundColor Yellow "   waiting for LogFile copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
 		
 	Write-Host "  [done]"
@@ -326,7 +330,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$irFolder\ExtractUsnJrnl.exe c: $diskDir" -ComputerName $target -Credential $cred | Out-Null
 	
-	do {(Write-Host -ForegroundColor Yellow "  waiting for UsnJrnl copy to complete..."),(Start-Sleep -Seconds 5)}
+	do {(Write-Host -ForegroundColor Yellow "   waiting for UsnJrnl copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -eq "ExtractUsnJrnl.exe"}).ProcessID -eq $null)
 	
 	Write-Host "  [done]"
@@ -342,7 +346,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SAM $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SECURITY $workingDir\reg" -ComputerName $target -Credential $cred | Out-Null
 
-	do 	{(Write-Host -ForegroundColor Yellow "  waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
+	do 	{(Write-Host -ForegroundColor Yellow "   waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
 			
 	Write-Host "  [done]"
@@ -483,7 +487,7 @@ if ($OSvers -like "6*"){
 		}
 echo ""	
 Write-Host -Fore Magenta ">>>[Tactical pause]<<<"
-do {(Write-Host -ForegroundColor Yellow "   Please wait...pausing for previous collection processes to complete..."),(Start-Sleep -Seconds 10)}
+do {(Write-Host -ForegroundColor Yellow "    Please wait...pausing for previous collection processes to complete..."),(Start-Sleep -Seconds 10)}
 until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy|ExtractUsnJrnl'}).ProcessID -eq $null)
 Write-Host -ForegroundColor Green "  [done]"
 
@@ -498,7 +502,7 @@ echo "=============================================="
 echo ""
 
 ##7zip the artifact collection##
-$7z = "cmd /c c:\Windows\temp\IR\7za.exe a $workingDir.7z -p$7zpass -mmt -mhe $workingDir"
+$7z = "cmd /c c:\Windows\temp\IR\7za.exe a $workingDir.7z -p$7zpass -mmt -mhe $workingDir\*"
 InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $7z -ComputerName $target -Credential $cred | Out-Null
 do {(Write-Host -ForegroundColor Yellow "   Please wait...packing the collected artifacts..."),(Start-Sleep -Seconds 10)}
 until ((Get-WMIobject -Class Win32_process -Filter "Name='7za.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "7za.exe"}).ProcessID -eq $null)
