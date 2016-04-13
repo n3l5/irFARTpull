@@ -21,7 +21,6 @@ Artifacts it grabs:
 	- NTFS LogFile
 	- Registry Files
 	- User NTUSER.dat files
-	- Java IDX files
 	- Internet History Files (IE, Firefox, Chrome)
 	
 When done collecting the artifacts, it will 7zip the data and pull the info off the box for offline analysis. 
@@ -167,19 +166,30 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	$mem = Get-CimInstance -ClassName Win32_PhysicalMemory -Cimsession $ir | Measure-Object -Property capacity -Sum | % {[Math]::Round(($_.sum / 1GB),2)}
 	$mfg = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Manufacturer
 	$model = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Model
-	$pctype = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % pcsystemtype
+	$type = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % pcsystemtype
+	$pctype = Switch ($type){	
+		0 {"Unknown system type"}
+		1 {"Desktop"}
+    	2 {"Mobile/Laptop"}
+		3 {"Workstation"}
+		4 {"Enterprise Server"}
+		5 {"Small Office and Home Office (SOHO) Server"}
+		6 {"Appliance PC"}
+		7 {"Performance Server"}
+		8 {"Maximum"}
+		default {"Unknown system type"}
+	   }	
 	$sernum = Get-CimInstance -ClassName Win32_Bios -Cimsession $ir | % SerialNumber
 	$tmzn = Get-CimInstance -ClassName Win32_TimeZone -Cimsession $ir | % Caption
 	$currUser = Get-CimInstance -ClassName Win32_ComputerSystem -Cimsession $ir | % Username
 	$arch = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % OSArchitecture
 	$OSvers = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % version
-	$osinstall = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % installdate
+	$osinstall = Get-CimInstance -ClassName Win32_OperatingSystem -Cimsession $ir | % installdate	
 		
 	echo ""
 	echo "=============================================="
 	Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
 	Write-Host -ForegroundColor Magenta "==[ Host OS: $OSname $arch"
-	Write-Host -ForegroundColor Magenta "==[ $targetName - $targetIP"
 	Write-Host -ForegroundColor Magenta "==[ Domain: $domain"
 	Write-Host -ForegroundColor Magenta "==[ Total memory size: $mem GB"
 	Write-Host -ForegroundColor Magenta "==[ Manufacturer: $mfg"
@@ -424,24 +434,6 @@ if ($OSvers -like "6*"){
 			Write-Host -Fore Green "  Pulling NTUSER.DAT file for $user...."
 			New-Item -Path $remoteIRfold\$artFolder\users\$user -ItemType Directory  | Out-Null
 			InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $source $destination" -ComputerName $target -Credential $cred | Out-Null
-			#gci$Userpath\$user -Include *.exe,*.dll,*.zip,*.tmp -Recurse | where-object {!$_.psiscontainer } | get-Filehash -algo md5 | select hash,path | Export-Csv -NoTypeInformation -Append $remoteIRfold\$artFolder\user-hashes.csv
-			#gci $Userpath\$user  -Recurse -Force -File -ErrorAction SilentlyContinue | select Name,CreationTime,CreationTimeUtc,@{Name="Size";Expression={"{0:N0}" -f ($_.Length / 1Kb)}},@{Label='Hash'; Expression={(Get-FileHash -Algorithm $hashalgorithm $psitem.fullname).hash}},Fullname | export-csv -Append -NoTypeInformation $remoteIRfold\$artFolder\users\$user\userhashes.csv
-			#Write-Host "$hashcount user hashes"
-
-##Pull IDX Files##
-		$idxpath = "$Userpath\$user\AppData\LocalLow\Sun\Java\Deployment\cache\6.0\"
-		if(Test-Path $idxpath -PathType Container) {
-			Write-Host -Fore Green "  Pulling IDX files for $user...."
-			$idxFiles = Get-ChildItem -Path $idxpath -Filter "*.idx" -Force -Recurse | Where-Object {$_.Length -gt 0 -and $_.LastWriteTime -gt (get-date).AddDays(-15)} | foreach {$_.Fullname}
-			Write-Host -Fore Yellow "    pulling IDX files...."
-			New-Item -Path $remoteIRfold\$artFolder\users\$user\idx -ItemType Directory  | Out-Null
-			foreach ($idx in $idxFiles){
-			Copy-Item -Path $idx -Destination $remoteIRfold\$artFolder\users\$user\idx -recurse
-				}
-		}
-		else {
-	 	 	Write-Host -Fore Red "  No IDX files newer than 15 days for $user...."
-	 	 	}
 
 ## Copy Win7 INET files
 		$inetexp = "$Userpath\$user\AppData\Local\Microsoft\Windows\History\"
