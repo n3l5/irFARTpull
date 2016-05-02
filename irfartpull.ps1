@@ -87,7 +87,10 @@ Param(
    [Parameter(Mandatory=$True)]
    [string]$mail
    )
-   
+
+$date = Get-Date -format yyyy-MM-dd_HHmm_
+$transcriptLog = $dumpDir + "\$date" + "_$target" + "_irFartpull_Transcript.log"
+Start-Transcript $transcriptLog 
 echo "=============================================="
 echo "=============================================="
 Write-Host -Fore Magenta "
@@ -131,8 +134,9 @@ $compCred = "$target" + "\$username"
 	Write-Host -Fore Yellow ">>>>> Testing connection to $target...."
 	echo ""
 
-	if ((!(Test-Connection -Cn $target -Count 3 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
+if ((!(Test-Connection -Cn $target -Count 3 -ea 0 -quiet)) -OR (!($socket = New-Object net.sockets.tcpclient("$target",445)))) {
 		Write-Host -Foreground Magenta "$target appears to be down"
+		Stop-Transcript
 		}
 
 ################
@@ -213,7 +217,6 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 	$irFolder = "c:\Windows\Temp\IR"
 	$remoteIRfold = "X:\windows\Temp\IR"
-	$date = Get-Date -format yyyy-MM-dd_HHmm_
 	$artFolder = $date + $targetName
 	$workingDir = $irFolder + "\$artFolder"
 	$localDirlist = ("$dumpDir\$artFolder")
@@ -255,6 +258,8 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 	$netinfo = @("x:\netstats.txt","x:\routetable.txt","x:\dnscache.txt","x:\arpdata.txt")
 	Copy-Item x:\windows\system32\drivers\etc\hosts $remoteIRfold\$artFolder\network\hosts
+
+	Move-Item -Path $netinfo -Destination $remoteIRfold\$artFolder\network -Force
 
 ##gather Process info
 	Write-Host -Fore Green "Pulling process info...."
@@ -396,6 +401,7 @@ else
 	{
 	Write-Host -Fore Red "No McAfee Quarantine files...."
 	}
+
 ##Copy McAfee Log Files (default location)##
 $mcafLog = "c:\ProgramData\McAfee\DesktopProtection"
 if (Test-Path -Path "$mcafLog\*.txt") {
@@ -407,7 +413,6 @@ else
 	{
 	Write-Host -Fore Red "No McAfee Log files...."
 	}
-		Move-Item -Path $netinfo -Destination $remoteIRfold\$artFolder\network -Force
 
 ###################
 ##Perform Operations on user files
@@ -548,4 +553,7 @@ Send-MailMessage -To "$mailTo" -Subject "IRFartpull done" -Body $body -From $mai
 echo "=============================================="
 Write-Host -ForegroundColor Magenta ">>>>>>>>>>[[ irFArtPull complete ]]<<<<<<<<<<<"
 echo "=============================================="
+Stop-Transcript
+$finalTrans = ($localDirlist + "\$targetname" + "_irFartpull_Transcript.log")
+Move-Item $transcriptLog $finalTrans
 }
