@@ -220,7 +220,7 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 	$artFolder = $date + $targetName
 	$workingDir = $irFolder + "\$artFolder"
 	$localDirlist = ("$dumpDir\$artFolder")
-	$dirList = ("$remoteIRfold\$artFolder\logs","$remoteIRfold\$artFolder\network","$remoteIRfold\$artFolder\prefetch","$remoteIRfold\$artFolder\reg","$remoteIRfold\$artFolder\disk")
+	$dirList = ("$remoteIRfold\$artFolder\logs","$remoteIRfold\$artFolder\network","$remoteIRfold\$artFolder\reg","$remoteIRfold\$artFolder\disk")
 	$diskDir = ("$workingDir\disk")
 	$sysInfofile = ($localDirlist + "\$targetName" +"_sysinfo.txt")
 	
@@ -303,11 +303,12 @@ elseif ((!($mail)) -OR ($mail -like "N*")) {
 
 ##Copy Prefetch files
 	
-	Write-Host -Fore Green "Pulling prefetch files...."
-	
+	if (Test-Path -Path "x:\windows\prefetch") {
+	Write-Host -Fore Green "Pulling prefetch files...."	
+	New-Item -Path "$remoteIRfold\$artFolder\prefetch" -ItemType Directory | Out-Null
 	Copy-Item x:\windows\prefetch\*.pf $remoteIRfold\$artFolder\prefetch -recurse
-	
 	Write-Host "  [done]"
+	}
 
 ##Determine $arch for x86 vs x64 tool use
 
