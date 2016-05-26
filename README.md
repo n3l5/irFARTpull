@@ -18,16 +18,17 @@ Artifacts it grabs:
 - Prefetch Files
 - $MFT
 - NTFS $LogFile
+- USN Journal
 - Registry Files
 - User NTUSER.dat files
-- Java IDX files
 - Internet History Files (IE, Firefox, Chrome)
 	
 When done collecting the artifacts, it will 7zip the data and yank the info off the box for off-line analysis. 
 		
 NOTEs: 
-- All testing done on PowerShell v3 oe v4
-- Requires RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
+- All testing done on PowerShell v4
+- Requires RawCopy64.exe for the extraction of "in use" files.
+- Requires ExtractUsnJrnl for the extraction of 
 - Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins.
 - Requires 7za.exe (7zip cmd line) for compression w/ password protection
 	
@@ -41,12 +42,14 @@ LINKs:
 irFARTpull main - https://github.com/n3l5/irFARTpull
 	
 Links to required tools:
-- RawCopy64.exe - Part of the mft2csv suite, RawCopy can be downloaded here: https://code.google.com/p/mft2csv/
+- RawCopy.exe & RawCopy64.exe - https://github.com/jschicht/RawCopy
+- ExtractUsnJrnl.exe - https://github.com/jschicht/ExtractUsnJrnl
 - Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins. https://technet.microsoft.com/en-us/sysinternals/bb963902.aspx
 - 7za.exe - Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
 	
 Various tools for analysis of the artifacts:
 - RegRipper - Tool for extracting data from Registry and NTUSER.dat files. https://code.google.com/p/regripper/
-- WinPrefetchView - utility to read Prefetch files. http://www.nirsoft.net/utils/win_prefetch_view.html
+- PECmd - utility to parse Prefetch files. http://binaryforay.blogspot.com/2016/01/pecmd-v0600-released.html
 - MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
+- LogParser - tool to parse event logs (and more) https://technet.microsoft.com/en-us/scriptcenter/dd919274.aspx
 - Triforce ANJP - tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
