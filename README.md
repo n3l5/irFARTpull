@@ -1,9 +1,18 @@
 
+  _      ______           _               _ _ 
+ (_)    |  ____/\        | |             | | |
+  _ _ __| |__ /  \   _ __| |_ _ __  _   _| | |
+ | | '__|  __/ /\ \ | '__| __| '_ \| | | | | |
+ | | |  | | / ____ \| |  | |_| |_) | |_| | | |
+ |_|_|  |_|/_/    \_\_|   \__| .__/ \__,_|_|_|
+                             | |              
+                             |_| 
+
 IR Forensic ARTifact pull (irFArtpull)
 
 DESCRIPTION:
 
-irFARTpull is a PowerShell script utilized to pull several forensic artifacts from a live Windows 7, 8, Server 2008, and Server 2012 systems on your network. 
+irFArtpull is a PowerShell script utilized to pull several forensic artifacts from a live Windows 7, 8, Server 2008, and Server 2012 systems on your network. 
 		
 Artifacts it grabs:
 - Disk Information
@@ -19,6 +28,7 @@ Artifacts it grabs:
 - $MFT
 - NTFS $LogFile
 - USN Journal
+- Amcache.hve
 - Registry Files
 - User NTUSER.dat files
 - Internet History Files (IE, Firefox, Chrome)
@@ -53,3 +63,4 @@ Various tools for analysis of the artifacts:
 - MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
 - LogParser - tool to parse event logs (and more) https://technet.microsoft.com/en-us/scriptcenter/dd919274.aspx
 - Triforce ANJP - tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
+**Since IRFartpull pulls raw files you can use whatever tool(s) you want.
