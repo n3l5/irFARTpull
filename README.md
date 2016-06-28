@@ -63,4 +63,5 @@ Various tools for analysis of the artifacts:
 - MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
 - LogParser - tool to parse event logs (and more) https://technet.microsoft.com/en-us/scriptcenter/dd919274.aspx
 - Triforce ANJP - tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
+- Cold Disk Quick Response (CDQR) - forensic artifact parsing tool that works on extracted artifacts. https://github.com/rough007/CDQR
 **Since IRFartpull pulls raw files you can use whatever tool(s) you want.
