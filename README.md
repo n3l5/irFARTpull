@@ -30,8 +30,8 @@ Artifacts it grabs:
 - USN Journal
 - Amcache.hve
 - Registry Files
-- User NTUSER.dat files
-- Internet History Files (IE, Firefox, Chrome)
+- User NTUSER.dat files (from user profiles used within last 15 days)
+- Internet History Files (IE, Firefox, Chrome from user profiles used within last 15 days)
 	
 When done collecting the artifacts, it will 7zip the data and yank the info off the box for off-line analysis. 
 		

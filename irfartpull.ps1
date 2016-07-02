@@ -135,12 +135,18 @@ $compCred = "$target" + "\$username"
 	echo ""
 
 #Test Ping & Test Raw Socket (port 445)
-$socket = New-Object net.sockets.tcpclient("$target",445)
+	$socket = New-Object net.sockets.tcpclient("$target",445)
 
-if ((!(Test-Connection -Cn $target -Count 3 -ea 0 -quiet)) -OR (!($socket))) {
-		Write-Host -Foreground Magenta "$target appears to be down, network tests failed. See Transcript log at $transcriptLog"
-		Stop-Transcript
-		}
+	if ((!(Test-Connection -Cn $target -Count 3 -ea 0 -quiet)) -OR (!($socket))) {
+			Write-Host -Foreground Magenta "$target appears to be down, network tests failed. See Transcript log at $transcriptLog"
+			Stop-Transcript
+			}
+
+#Test the share access to remote system, utilizing PSDrive mapping to remote drive
+	if (!(New-PSDrive -Name x -PSProvider filesystem -Root \\$target\c$ -Credential $cred)){
+			Write-Host -Foreground Magenta "Admin share access to $target likely denied, or the network failed. See Transcript log at $transcriptLog"
+			Stop-Transcript
+			}
 
 ################
 ##Target is up, start the collection
@@ -214,9 +220,6 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 ################
 ##For consistency, the working directory will be located in the "c:\windows\temp\IR" folder on both the target and initiator system.
 ##Tools will stored directly in the "IR" folder for use. Artifacts collected on the local environment of the remote system will be dropped in the workingdir.
-
-##Set up PSDrive mapping to remote drive
-	New-PSDrive -Name x -PSProvider filesystem -Root \\$target\c$ -Credential $cred | Out-Null
 
 	$irFolder = "c:\Windows\Temp\IR"
 	$remoteIRfold = "X:\windows\Temp\IR"
@@ -436,7 +439,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 ##Determine User Profiles
 	if ($OSname -match "Windows 7|Windows 8|Windows 10"){
 			$Userpath = "x:\users"
-			$localprofiles = Get-WMIObject Win32_UserProfile -filter "Special != 'true'" -ComputerName $target -Credential $cred | Where {$_.LocalPath -and ($_.ConvertToDateTime($_.LastUseTime)) -gt (get-date).AddDays(-15) }
+			$localprofiles = Get-CimInstance -ClassName Win32_UserProfile -Cimsession $ir -filter "Special != 'true'" | select * | Where {$_.LastUseTime -gt (get-date).AddDays(-15)}
 			foreach ($localprofile in $localprofiles){
 				$temppath = $localprofile.localpath
 				$source = $temppath + "\ntuser.dat"
@@ -464,7 +467,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 		if (Test-Path -Path $foxpath -PathType Container) {
 			Write-Host -Fore Green "  Pulling FireFox Internet History files for $user....(W7)"
 			New-Item -Path $remoteIRfold\$artFolder\users\$user\InternetHistory\Firefox -ItemType Directory  | Out-Null
-			$ffinet = Get-ChildItem $foxpath -Filter "places.sqlite" -Force -Recurse | foreach {$_.Fullname}
+			$ffinet = Get-ChildItem $foxpath -Filter "places.sqlite" -Force -Recurse | Where {($_.LastWriteTime -gt ((get-date).AddDays(-15)))} | % fullname
 			Foreach ($ffi in $ffinet) {
 				Copy-Item -Path $ffi -Destination $remoteIRfold\$artFolder\users\$user\InternetHistory\Firefox
 				$ffdown = Get-ChildItem $foxpath -Filter "downloads.sqlite" -Force -Recurse | foreach {$_.Fullname}
@@ -482,7 +485,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 		if ($OSvers -like "6*" -and (Test-Path -Path $chromepath -PathType Container)) {
 			Write-Host -Fore Green "  Pulling Chrome Internet History files for $user....(W7)"
 			New-Item -Path $remoteIRfold\$artFolder\users\$user\InternetHistory\Chrome -ItemType Directory  | Out-Null
-			$chromeInet = Get-ChildItem $chromepath -Filter "History" -Force -Recurse | foreach {$_.Fullname}
+			$chromeInet = Get-ChildItem $chromepath -Filter "History" -Force -Recurse | Where {($_.LastWriteTime -gt ((get-date).AddDays(-15)))} | % fullname
 			Foreach ($chrmi in $chromeInet) {
 			Copy-Item -Path $chrmi -Destination $remoteIRfold\$artFolder\users\$user\InternetHistory\Chrome
 				}
@@ -523,7 +526,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 	$7z = "cmd /c c:\Windows\temp\IR\7za.exe a $workingDir.7z -p$7zpass -mmt -mhe $workingDir\*"
 	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList $7z -ComputerName $target -Credential $cred | Out-Null
 	do {(Write-Host -ForegroundColor Yellow "   Please wait...packing the collected artifacts..."),(Start-Sleep -Seconds 10)}
-	until ((Get-WMIobject -Class Win32_process -Filter "Name='7za.exe'" -ComputerName $target -Credential $cred | where {$_.Name -eq "7za.exe"}).ProcessID -eq $null)
+	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -eq '7za.exe'}).ProcessID -eq $null)
 	Write-Host -ForegroundColor Yellow "  [Packing complete]"
 
 ##size it up
