@@ -85,6 +85,9 @@ Param(
    [string]$7zpass,
    
    [Parameter(Mandatory=$True)]
+   [string]$InetHist,
+
+   [Parameter(Mandatory=$True)]
    [string]$mail
    )
 
@@ -221,6 +224,9 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 ##For consistency, the working directory will be located in the "c:\windows\temp\IR" folder on both the target and initiator system.
 ##Tools will stored directly in the "IR" folder for use. Artifacts collected on the local environment of the remote system will be dropped in the workingdir.
 
+##Set up PSDrive mapping to remote drive
+	New-PSDrive -Name x -PSProvider filesystem -Root \\$target\c$ -Credential $cred | Out-Null
+
 	$irFolder = "c:\Windows\Temp\IR"
 	$remoteIRfold = "X:\windows\Temp\IR"
 	$artFolder = $date + $targetName
@@ -318,7 +324,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 ##Copy NTFS $LogFile
 
 	Write-Host -Fore Green "Pulling the NTFS Logfile...."
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy c:2 $diskDir" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:c:2 /OutputPath:$diskDir" -ComputerName $target -Credential $cred | Out-Null
 	
 	do {(Write-Host -ForegroundColor Yellow "   waiting for LogFile copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
@@ -342,10 +348,10 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 	
 	$regLoc = "c:\windows\system32\config"
 
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SOFTWARE $rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SYSTEM $rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SAM $rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $regLoc\SECURITY $rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$regLoc\SOFTWARE /OutputPath:$rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$regLoc\SYSTEM /OutputPath:$rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$regLoc\SAM /OutputPath:$rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$regLoc\SECURITY /OutputPath:$rawFiledir\reg" -ComputerName $target -Credential $cred | Out-Null
 
 	do 	{(Write-Host -ForegroundColor Yellow "   waiting for Reg Files copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
@@ -370,7 +376,7 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 		$Amcache = "c:\windows\appcompat\programs\amcache.hve"
 		if(Test-Path $Amcache){
 			Write-Host -Fore Green "Pulling registry files...."
-			InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $amcache $rawFiledir" -ComputerName $target -Credential $cred | Out-Null
+			InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$amcache /OutputPath:$rawFiledir" -ComputerName $target -Credential $cred | Out-Null
 		
 			do {(Write-Host -ForegroundColor Yellow "   waiting for Amcache copy to complete..."),(Start-Sleep -Seconds 5)}
 			until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
@@ -451,12 +457,15 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 				Write-Host -ForegroundColor Magenta "Pulling items for >> [ $user ]"
 				Write-Host -Fore Green "  Pulling NTUSER.DAT file for $user...."
 				New-Item -Path $remoteIRfold\$artFolder\users\$user -ItemType Directory  | Out-Null
-				InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy $source $destination" -ComputerName $target -Credential $cred | Out-Null
+				InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:$source /OutputPath:$destination" -ComputerName $target -Credential $cred | Out-Null
 
+			
+if ($InetHist -like "Y*"){
 ## Copy Win7 INET files
 		$inetexp = "$Userpath\$user\AppData\Local\Microsoft\Windows\History\"
 		Write-Host -Fore Green "  Pulling Internet Explorer History files for $user...."
 		New-Item -Path $remoteIRfold\$artFolder\users\$user\InternetHistory\IE -ItemType Directory | Out-Null
+		
 		$inethist = Get-ChildItem -Path $inetexp -ReCurse -Force | foreach {$_.Fullname}
 		foreach ($inet in $inethist) {
 			Copy-Item -Path $inet -Destination $remoteIRfold\$artFolder\users\$user\InternetHistory\IE -Force -Recurse
@@ -464,8 +473,9 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 
 ##Copy FireFox History files##
 		$foxpath = "$Userpath\$user\AppData\Roaming\Mozilla\Firefox\profiles"
+		
 		if (Test-Path -Path $foxpath -PathType Container) {
-			Write-Host -Fore Green "  Pulling FireFox Internet History files for $user....(W7)"
+			Write-Host -Fore Green "  Pulling FireFox Internet History files for $user...."
 			New-Item -Path $remoteIRfold\$artFolder\users\$user\InternetHistory\Firefox -ItemType Directory  | Out-Null
 			$ffinet = Get-ChildItem $foxpath -Filter "places.sqlite" -Force -Recurse | Where {($_.LastWriteTime -gt ((get-date).AddDays(-15)))} | % fullname
 			Foreach ($ffi in $ffinet) {
@@ -481,9 +491,10 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 	 	 	}
 
 ##Copy Chrome History files##
-	$chromepath = "$Userpath\$user\AppData\Local\Google\Chrome\User Data\Default"
+		$chromepath = "$Userpath\$user\AppData\Local\Google\Chrome\User Data\Default"
+		
 		if ($OSvers -like "6*" -and (Test-Path -Path $chromepath -PathType Container)) {
-			Write-Host -Fore Green "  Pulling Chrome Internet History files for $user....(W7)"
+			Write-Host -Fore Green "  Pulling Chrome Internet History files for $user...."
 			New-Item -Path $remoteIRfold\$artFolder\users\$user\InternetHistory\Chrome -ItemType Directory  | Out-Null
 			$chromeInet = Get-ChildItem $chromepath -Filter "History" -Force -Recurse | Where {($_.LastWriteTime -gt ((get-date).AddDays(-15)))} | % fullname
 			Foreach ($chrmi in $chromeInet) {
@@ -493,14 +504,15 @@ Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
 		else {
 		 Write-Host -Fore Red "  No Chrome Internet History files $user...."
 		 	}
-			}
 		}
+	}			
+}		
 	echo ""	
 
 ##Copy $MFT
 	Write-Host -Fore Green "Pulling the MFT...."
 	
-	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy c:0 $diskDir" -ComputerName $target -Credential $cred | Out-Null
+	InVoke-WmiMethod -class Win32_process -name Create -ArgumentList "$rawcopy /FileNamePath:c:0 /OutputPath:$diskDir" -ComputerName $target -Credential $cred | Out-Null
 	
 	do {(Write-Host -ForegroundColor Yellow "   waiting for MFT copy to complete..."),(Start-Sleep -Seconds 5)}
 	until ((Get-CimInstance -ClassName Win32_Process -Cimsession $ir | select * | where {$_.name -match 'rawcopy'}).ProcessID -eq $null)
