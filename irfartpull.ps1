@@ -82,7 +82,6 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 #>
 Param(
   [Parameter(Mandatory=$True,Position=0)]
-   [ValidateScript({$_ -match [IPAddress]$_ })]
    [string]$target,
    
    [Parameter(Mandatory=$True,Position=1)]
@@ -169,11 +168,15 @@ $compCred = "$target" + "\$username"
 ##Target is up, start the collection
 ################
 
-else {
-Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
-echo ""
+	else {
+		Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
+	echo ""
 
-
+#Determine if InetHist is wanted
+	if ($InetHist -like "N*") {
+		Write-Host -Foregroundcolor Cyan "  -Internet History collection off-"
+		}
+	echo ""
 
 #Determine if Mail Alert is wanted ask for particulars
 	if ($SendMail -like "Y*") {
@@ -183,7 +186,7 @@ echo ""
 		}
 	elseif ((!($SendMail)) -OR ($mail -like "N*")) {
 		Write-Host -Foregroundcolor Cyan "  -Mail notification off-"
-			}
+		}
 
 #Set up DCOM connection (no remote WSMan)
 	$dcom = New-CimsessionOption -Protocol DCOM
