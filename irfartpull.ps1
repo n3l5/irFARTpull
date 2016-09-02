@@ -25,70 +25,84 @@ Artifacts it grabs:
 	
 When done collecting the artifacts, it will 7zip the data and pull the info off the box for offline analysis. 
 
-.PARAMETER Target
-    This is the target computer where you will be collecting artifacts from.
+.PARAMETER target
+    This is the target IP of the computer where you will be collecting artifacts from. Can be IP or Hostname.
 
-.PARAMETER ToolsDir
+.PARAMETER toolsDir
 	This the file path location of the tools on the analysis system.
 
-.PARAMETER DumpDir
+.PARAMETER dumpDir
 	This is the file path location you want the artifact collection dumped. (On analysis system or other location like UNC path to server share)
 
 .PARAMETER 7zpass
-	This is the password for the compressed & password protected file that the artifacts will be put into.
+	This is the password for the compressed & password protected file that the artifacts will be put into.  If entering in one string using -7zpass, you must enclose in quotes like: "password". 
 
-.PARAMETER mail
-	Answer [Y] Yes if you want an email sent telling the capture is complete, or answer [N] No to not get one. 
+.PARAMETER InetHist
+	Answer [Y or Yes] if you want to collect users internet history, or answer [N or No] to not collect users internet history.
 
-.NOTEs:  
-    
-	All testing done on PowerShell v4+
-	Requires RawCopy.exe,RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
-	Requires ExtractUsnJrnl.exe for the extraction of the $USNJ
-	Requires Autorunsc.exe for the extraction of auto run info
-	Requires 7za.exe (7zip cmd line) for compression w/ password protection
+.PARAMETER SendMail
+	Answer [Y or Yes] if you want an email sent telling the capture is complete, or answer [N or No] to not get one. 
+
+.EXAMPLE
+	In this example we are using a HOSTNAME as the target.
+	irfartpull.ps1 -target HOSTNAME -toolsdir c:\SOMEPATH\SOMEDIR -dumpdir c:\SOMEPATH\SOMEDIR -7zpass"bob" -inethist N -mail N
+.EXAMPLE
+	In this example we are using an IPADDRESS as the target.
+	irfartpull.ps1 -target 111.222.333.444 -toolsdir c:\SOMEPATH\SOMEDIR -dumpdir c:\SOMEPATH\SOMEDIR -7zpass"PASSWORD" -inethist N -mail N
+
+.NOTES  
+    All testing done on PowerShell v4+
 	
-	Assumed Directories:
-	c:\tools\resp\ - where the RawCopy.exe, RawCopy64.exe, ExtractUsnJrnl.exe, Autorunsc.exe, and 7za.exe exist
-	c:\windows\temp\IR - Where the work will be done/copied (on $target system)
+	Requires:
+		RawCopy.exe,RawCopy64.exe for the extraction of MFT$ and NTUSER.DAT files.
+		Requires ExtractUsnJrnl.exe for the extraction of the $USNJ
+		Requires Autorunsc.exe for the extraction of auto run info
+		Requires 7za.exe (7zip cmd line) for compression w/ password protection
+	
+	Must be ran as a user that will have Admin creds on the remote system.
+	
+	The system can be on a domain or standalone, you will have the option to provide credentials that are Domain or Host.
+	
+.LINK
+	
+	irFARTpull main -- https://github.com/n3l5/irFARTpull
+	
+	[REQUIRED TOOLS]
+		Rawcopy -- https://github.com/jschicht/RawCopy
+		ExtractUsnJrnl -- https://github.com/jschicht/ExtractUsnJrnl
+		Autorunsc -- Command line version of Autoruns - https://technet.microsoft.com/en-us/sysinternals/bb963902.aspx
+		7-Zip -- Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
 		
-	Must be ran as a user that will have Admin creds on the remote system. The assumption is that the target system is part of a domain.
-	
-    LINKs:  
-	
-	irFARTpull main - https://github.com/n3l5/irFARTpull
-	
-	Links to required tools:
-	Rawcopy - https://github.com/jschicht/RawCopy
-	ExtractUsnJrnl - https://github.com/jschicht/ExtractUsnJrnl
-	Autorunsc - Command line version of Autoruns - https://technet.microsoft.com/en-us/sysinternals/bb963902.aspx
-	7-Zip - Part of the 7-Zip archiver, 7za can be downloaded from here: http://www.7-zip.org/
-		
-	Various tools for analysis of the artifacts:
-	RegRipper - Tool for extracting data from Registry and NTUSER.dat files. https://github.com/keydet89/RegRipper2.8
-	WinPrefetchView - utility to read Prefetch files. http://www.nirsoft.net/utils/win_prefetch_view.html
-	MFTDump - tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
-	Triforce ANJP - tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
+	[VARIOUS ANALYSIS TOOLS]
+		RegRipper -- Tool for extracting data from Registry and NTUSER.dat files. https://github.com/keydet89/RegRipper2.8
+		WinPrefetchView -- utility to read Prefetch files. http://www.nirsoft.net/utils/win_prefetch_view.html
+		MFTDump -- tool to dump the contents of the $MFT. http://malware-hunters.net/2012/09/
+		Triforce ANJP -- tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
 
 #>
 Param(
   [Parameter(Mandatory=$True,Position=0)]
+   [ValidateScript({$_ -match [IPAddress]$_ })]
    [string]$target,
    
-   [Parameter(Mandatory=$True)]
+   [Parameter(Mandatory=$True,Position=1)]
+   [ValidateScript({Test-Path $_ -PathType 'Container'})]
    [string]$toolsDir,
    
-   [Parameter(Mandatory=$True)]
+   [Parameter(Mandatory=$True,Position=2)]
+   [ValidateScript({Test-Path $_ -PathType 'Container'})]
    [string]$dumpDir,
    
-   [Parameter(Mandatory=$True)]
-   [string]$7zpass,
+   [Parameter(Mandatory=$True,Position=3)]
+   [string]$7zpass ,
    
-   [Parameter(Mandatory=$True)]
+   [Parameter(Mandatory=$True,Position=4)]
+   [ValidateSet("Yes","Y","No","N")]
    [string]$InetHist,
 
-   [Parameter(Mandatory=$True)]
-   [string]$mail
+   [Parameter(Mandatory=$True,Position=5)]
+   [ValidateSet("Yes","Y","No","N")]
+   [string]$SendMail
    )
 
 $date = Get-Date -format yyyy-MM-dd_HHmm_
@@ -157,14 +171,17 @@ $compCred = "$target" + "\$username"
 
 else {
 Write-Host -Foreground Magenta "  -$target is up, starting the collection-"
+echo ""
+
+
 
 #Determine if Mail Alert is wanted ask for particulars
-	if ($mail -like "Y*") {
+	if ($SendMail -like "Y*") {
 		$mailTo = Read-Host "Enter alert TO: email address...multiples should separated like such - "user1@abc.com", "user2@abc.com""
 		$mailFrom = Read-Host "Enter alert FROM: email address..."
 		$smtpServer = Read-Host "Enter SMTP relay server..."
 		}
-	elseif ((!($mail)) -OR ($mail -like "N*")) {
+	elseif ((!($SendMail)) -OR ($mail -like "N*")) {
 		Write-Host -Foregroundcolor Cyan "  -Mail notification off-"
 			}
 

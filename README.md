@@ -1,4 +1,5 @@
 
+ 
   _      ______           _               _ _ 
  (_)    |  ____/\        | |             | | |
   _ _ __| |__ /  \   _ __| |_ _ __  _   _| | |
@@ -36,9 +37,9 @@ Artifacts it grabs:
 When done collecting the artifacts, it will 7zip the data and yank the info off the box for off-line analysis. 
 		
 NOTEs: 
-- All testing done on PowerShell v4
-- Requires RawCopy64.exe for the extraction of "in use" files.
-- Requires ExtractUsnJrnl for the extraction of 
+- All testing done on PowerShell v4+
+- Requires RawCopy.exe (x32) & RawCopy64.exe for the extraction of "in use" files. Version: RawCopy v1.0.0.15 (latest as of writing)
+- Requires ExtractUsnJrnl for the extraction of the NTFS change journal ($UsnJrnl)
 - Autorunsc - Command line version of Autoruns; shows the programs configure to run during login, system bootup, and application plug-ins.
 - Requires 7za.exe (7zip cmd line) for compression w/ password protection
 	
