@@ -16,6 +16,7 @@ Artifacts it grabs:
 	- Services
 	- Event Logs (System, Security, Application, Windows Powershell)
 	- Prefetch Files
+	- CCM_RecentlyUsedApps
 	- MFT
 	- USNJournal
 	- NTFS LogFile
@@ -80,6 +81,7 @@ When done collecting the artifacts, it will 7zip the data and pull the info off 
 		Triforce ANJP -- tool to examining the MFT, LogFile, and USN. https://www.gettriforce.com/product/anjp-free/
 
 #>
+[CmdletBinding()]
 Param(
   [Parameter(Mandatory=$True,Position=0)]
    [string]$target,
@@ -303,6 +305,12 @@ $compCred = "$target" + "\$username"
 ##gather Services info
 	Write-Host -Fore Green "Pulling service info...."
 	Get-CimInstance -ClassName Win32_Service -Cimsession $ir | select processid,startname,state,name,displayname,pathname,startmode | Export-CSV $dumpDir\$artFolder\services.csv -NoTypeInformation
+
+##Collect CCM_RecentlyUsedApps
+
+	If (Get-CimInstance -namespace root\CCM\SoftwareMeteringAgent -Classname CCM_RecentlyUsedApps -Cimsession $ir){
+		Get-CimInstance -namespace root\CCM\SoftwareMeteringAgent -Classname CCM_RecentlyUsedApps -Cimsession $ir | select-object explorerfilename,FolderPath,OriginalFileName,LaunchCount,FileSize,LastUsedTime,LastUserName,FileDescription,ProductName,FileVersion,ProductVersion | Export-CSV $dumpDir\$artFolder\CCM_RecentlyUsedApps.csv -NoTypeInformation | Out-Null
+		}
 
 ##Determine $arch for x86 vs x64 tool use
 

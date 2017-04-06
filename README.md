@@ -1,5 +1,7 @@
 
- 
+
+
+
   _      ______           _               _ _ 
  (_)    |  ____/\        | |             | | |
   _ _ __| |__ /  \   _ __| |_ _ __  _   _| | |
@@ -7,7 +9,8 @@
  | | |  | | / ____ \| |  | |_| |_) | |_| | | |
  |_|_|  |_|/_/    \_\_|   \__| .__/ \__,_|_|_|
                              | |              
-                             |_| 
+                             |_|              
+
 
 IR Forensic ARTifact pull (irFArtpull)
 
@@ -26,6 +29,7 @@ Artifacts it grabs:
 - Services
 - Event Logs (System, Security, Application)
 - Prefetch Files
+- CCM_RecentlyUsedApps
 - $MFT
 - NTFS $LogFile
 - USN Journal
